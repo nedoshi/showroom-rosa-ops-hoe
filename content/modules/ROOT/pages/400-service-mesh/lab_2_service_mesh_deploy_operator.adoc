@@ -10,7 +10,7 @@ This workshop uses package `servicemeshoperator3` (display name *Red Hat OpenShi
 ====
 
 :numbered:
-== Operator overview (Service Mesh 3)
+== Service Mesh 3 Operator install
 
 Install these Operators in order and wait for each CSV to reach *Succeeded* before continuing:
 
