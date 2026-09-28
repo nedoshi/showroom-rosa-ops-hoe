@@ -48,11 +48,11 @@ Use the full resource name `virtualservice.networking.istio.io` when checking st
 . Refresh the Bookinfo product page several times.
 Most responses show reviews without stars (`v1`); some show black stars (`v2`).
 +
-Recover the URL with:
+Recover the OpenShift Route URL with:
 +
 [source,sh,role=execute]
 ----
-echo "http://$(oc -n bookinfo get gtw bookinfo-gateway -o jsonpath='{.status.addresses[0].value}')/productpage"
+echo "https://$(oc -n bookinfo get route bookinfo -o jsonpath='{.spec.host}')/productpage"
 ----
 
 == Deploy Kiali and observe traffic
@@ -137,7 +137,7 @@ image::verify-overiview-bookinfoapp.png[Kiali Console]
 [source,sh,role=execute]
 ----
 while true; do
-  curl -sS "http://$(oc -n bookinfo get gtw bookinfo-gateway -o jsonpath='{.status.addresses[0].value}')/productpage" \
+  curl -k -sS "https://$(oc -n bookinfo get route bookinfo -o jsonpath='{.spec.host}')/productpage" \
     | head -n 5
   sleep 1
 done

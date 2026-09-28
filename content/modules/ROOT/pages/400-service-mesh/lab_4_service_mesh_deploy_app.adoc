@@ -1,11 +1,11 @@
 == Introduction
 
-Deploy the standard Istio *Bookinfo* sample into the mesh, add DestinationRules for version subsets, and expose the app with the *Kubernetes Gateway API*.
+Deploy the standard Istio *Bookinfo* sample into the mesh, add DestinationRules for version subsets, and expose the app on an OpenShift Route (`*.apps.rosa...`).
 
-Service Mesh 3 does not deploy an ingress gateway as part of the `Istio` CR.
-On OpenShift 4.19+, Gateway API CRDs are platform-managed; Istio provides the `istio` GatewayClass after the control plane is Healthy.
+Service Mesh 3 does *not* deploy an ingress gateway as part of the `Istio` CR.
+This lab uses *gateway injection*: a `ClusterIP` `istio-ingressgateway` Deployment/Service in the app namespace, an Istio `Gateway` + `VirtualService`, then an OpenShift Route so the URL looks like other workshop apps.
 
-Sample manifests are pinned to the OpenShift Service Mesh Istio `release-1.28` branch, which matches the Istio control plane version validated with Service Mesh Operator 3.3.x on this workshop path.
+Sample manifests are pinned to the OpenShift Service Mesh Istio `release-1.28` branch (matches Service Mesh Operator 3.3.x / Istio v1.28.x on this path). The ingress gateway Deployment comes from the Sail Operator samples.
 
 :numbered:
 == Create and enroll the Bookinfo project
@@ -78,24 +78,67 @@ destinationrule.networking.istio.io/ratings created
 destinationrule.networking.istio.io/details created
 ----
 
-. Create the Gateway API `Gateway` + `HTTPRoute`:
+=== Deploy an injected ingress gateway and OpenShift Route
+
+. Deploy the gateway injection sample (`ClusterIP` Service + Deployment with `inject.istio.io/templates: gateway`):
 +
 [source,sh,role=execute]
 ----
 oc -n bookinfo apply -f \
-  https://raw.githubusercontent.com/openshift-service-mesh/istio/release-1.28/samples/bookinfo/gateway-api/bookinfo-gateway.yaml
+  https://raw.githubusercontent.com/istio-ecosystem/sail-operator/main/chart/samples/ingress-gateway.yaml
 ----
 +
 .Sample Output
 [source,text,options=nowrap]
 ----
-gateway.gateway.networking.k8s.io/bookinfo-gateway created
-httproute.gateway.networking.k8s.io/bookinfo created
+service/istio-ingressgateway created
+deployment.apps/istio-ingressgateway created
+role.rbac.authorization.k8s.io/istio-ingressgateway-sds created
+rolebinding.rbac.authorization.k8s.io/istio-ingressgateway-sds created
 ----
+
+. Wait for the gateway pod to become Ready (`1/1`):
++
+[source,sh,role=execute]
+----
+oc -n bookinfo rollout status deploy/istio-ingressgateway --timeout=180s
+----
+
+. Apply the Istio `Gateway` and `VirtualService` that route `/productpage` to Bookinfo:
++
+[source,sh,role=execute]
+----
+oc -n bookinfo apply -f \
+  https://raw.githubusercontent.com/openshift-service-mesh/istio/release-1.28/samples/bookinfo/networking/bookinfo-gateway.yaml
+----
++
+.Sample Output
+[source,text,options=nowrap]
+----
+gateway.networking.istio.io/bookinfo-gateway created
+virtualservice.networking.istio.io/bookinfo created
+----
+
+. Create an OpenShift Route on the gateway Service HTTP port (`http2` → container `8080`):
++
+[source,sh,role=execute]
+----
+oc -n bookinfo create route edge bookinfo \
+  --service=istio-ingressgateway \
+  --port=http2 \
+  --insecure-policy=Redirect
+----
++
+[IMPORTANT]
+====
+Do *not* use `oc expose service` without `--port=http2`.
+On multi-port Services, expose can pick the wrong port and the `*.apps.rosa...` URL will fail.
+Prefer `create route edge ... --port=http2` as shown above.
+====
 
 == Verify the Bookinfo installation
 
-. Wait for application pods. Sidecar injection succeeded when each Bookinfo workload shows `2/2` Ready:
+. Confirm application pods are Ready. Sidecar injection succeeded when each Bookinfo workload shows `2/2`:
 +
 [source,sh,role=execute]
 ----
@@ -105,35 +148,32 @@ oc -n bookinfo get pods
 .Sample Output
 [source,text,options=nowrap]
 ----
-NAME                                      READY   STATUS    RESTARTS   AGE
-bookinfo-gateway-istio-xxxxxxxxxx-xxxxx   1/1     Running   0          30s
-details-v1-xxxxxxxxxx-xxxxx               2/2     Running   0          40s
-productpage-v1-xxxxxxxxxx-xxxxx           2/2     Running   0          40s
-ratings-v1-xxxxxxxxxx-xxxxx               2/2     Running   0          40s
-reviews-v1-xxxxxxxxxx-xxxxx               2/2     Running   0          40s
-reviews-v2-xxxxxxxxxx-xxxxx               2/2     Running   0          40s
-reviews-v3-xxxxxxxxxx-xxxxx               2/2     Running   0          40s
+NAME                                    READY   STATUS    RESTARTS   AGE
+details-v1-xxxxxxxxxx-xxxxx             2/2     Running   0          40s
+istio-ingressgateway-xxxxxxxxxx-xxxxx   1/1     Running   0          30s
+productpage-v1-xxxxxxxxxx-xxxxx         2/2     Running   0          40s
+ratings-v1-xxxxxxxxxx-xxxxx             2/2     Running   0          40s
+reviews-v1-xxxxxxxxxx-xxxxx             2/2     Running   0          40s
+reviews-v2-xxxxxxxxxx-xxxxx             2/2     Running   0          40s
+reviews-v3-xxxxxxxxxx-xxxxx             2/2     Running   0          40s
 ----
 
-. Confirm the Gateway is programmed and has an address:
+. Print the OpenShift Route product page URL:
 +
 [source,sh,role=execute]
 ----
-oc -n bookinfo wait --for=condition=programmed gtw/bookinfo-gateway --timeout=180s
-oc -n bookinfo get gtw bookinfo-gateway
+echo "https://$(oc -n bookinfo get route bookinfo -o jsonpath='{.spec.host}')/productpage"
 ----
-
-. Build the product page URL from the Gateway address:
 +
-[source,sh,role=execute]
+.Sample Output
+[source,text,options=nowrap]
 ----
-echo "http://$(oc -n bookinfo get gtw bookinfo-gateway -o jsonpath='{.status.addresses[0].value}')/productpage"
+https://bookinfo-bookinfo.apps.rosa.<cluster>.p3.openshiftapps.com/productpage
 ----
 +
 [WARNING]
 ====
-This is an `http` URL. Some browsers upgrade to `https` and fail.
-On ROSA the address is typically an AWS load balancer hostname — allow a minute for DNS before testing externally.
+Open the *`/productpage`* path. The Route root (`/`) is not mapped by the Bookinfo VirtualService and returns 404.
 ====
 
 . Verify in-cluster that Bookinfo is serving:
@@ -150,9 +190,9 @@ oc -n bookinfo exec "$(oc get pod -l app=ratings -n bookinfo -o jsonpath='{.item
 <title>Simple Bookstore App</title>
 ----
 
-. Open the product page URL from the Gateway step in a browser.
+. Open the Route URL from the earlier step in a browser.
 You should see *"The Comedy of Errors"*. If reviews show an error, wait a few seconds and refresh.
 
 *Congratulations!*
 
-Bookinfo is running in the Service Mesh 3 data plane and is reachable through the Gateway API ingress.
+Bookinfo is running in the Service Mesh 3 data plane and is reachable on your cluster's `*.apps.rosa...` Route.

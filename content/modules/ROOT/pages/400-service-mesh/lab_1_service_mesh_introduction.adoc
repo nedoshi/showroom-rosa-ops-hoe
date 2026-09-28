@@ -21,7 +21,7 @@ With OpenShift Service Mesh 3 you get:
 
 * A production-supported Istio control plane on OpenShift (`istiod`)
 * Automatic sidecar injection for labeled namespaces
-* Traffic management with VirtualServices, DestinationRules, and the Kubernetes Gateway API
+* Traffic management with VirtualServices, DestinationRules, and an injected ingress gateway exposed via OpenShift Routes
 * Optional observability through Kiali (installed separately in Service Mesh 3)
 
 == Architecture changes in Service Mesh 3
@@ -31,7 +31,7 @@ With OpenShift Service Mesh 3 you get:
 | Operator | Red Hat OpenShift Service Mesh 2 | Red Hat OpenShift Service Mesh *3* |
 | Control plane CR | `ServiceMeshControlPlane` (`maistra.io`) | `Istio` (`sailoperator.io`) |
 | CNI CR | bundled with SMCP | `IstioCNI` (separate project, typically `istio-cni`) |
-| Gateways | often created by SMCP | *not* created by the Operator — deploy Gateway API or gateway injection yourself |
+| Gateways | often created by SMCP | *not* created by the Operator — deploy gateway injection (or Gateway API) yourself |
 | Kiali / tracing | add-ons on the SMCP | install and configure separately (Kiali Operator, Tempo/OTEL as needed) |
 | Namespace membership | `ServiceMeshMemberRoll` | discovery selectors + injection labels (`istio-discovery`, `istio-injection`) |
 
@@ -60,5 +60,5 @@ Service Mesh 3 tracks upstream Istio more closely than Service Mesh 2, while rem
 
 . Install the OpenShift Service Mesh 3 Operator (and Kiali Operator for the observe lab).
 . Deploy the Istio control plane (`Istio`) and CNI plugin (`IstioCNI`).
-. Deploy the Bookinfo sample, DestinationRules, and a Gateway API ingress.
+. Deploy the Bookinfo sample, DestinationRules, an injected ingress gateway, and an OpenShift Route (`*.apps.rosa...`).
 . Shift traffic with a weighted VirtualService and observe the mesh in Kiali.

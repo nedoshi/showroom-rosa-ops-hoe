@@ -6,7 +6,7 @@ OpenShift Service Mesh 3 deploys Istio through two custom resources:
 * `IstioCNI` — CNI DaemonSet in a separate project such as `istio-cni`
 
 The Operator does *not* create ingress/egress gateways for you.
-Gateways are application-layer resources you deploy later (Gateway API in this workshop).
+Gateways are application-layer resources you deploy later (gateway injection + OpenShift Route in this workshop).
 
 Official reference: https://docs.redhat.com/en/documentation/red_hat_openshift_service_mesh/3.3/html/installing/ossm-installing-service-mesh[Installing OpenShift Service Mesh].
 
